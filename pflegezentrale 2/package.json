@@ -1,0 +1,11 @@
+{
+  "name": "pflegezentrale",
+  "private": true,
+  "workspaces": ["apps/*", "packages/*"],
+  "scripts": {
+    "dev:api": "npm run start:dev -w @pflegezentrale/api",
+    "db:migrate": "npm run db:migrate -w @pflegezentrale/api",
+    "typecheck": "npm run typecheck -w @pflegezentrale/api",
+    "test": "npm test -w @pflegezentrale/api"
+  }
+}
