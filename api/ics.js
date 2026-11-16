@@ -17,7 +17,9 @@ module.exports = L.route('GET', async (req, res, cfg) => {
     : await db.query(`SELECT id, data, rev::text AS rev, updated_at AS updated FROM items WHERE collection='appts' AND deleted_at IS NULL ORDER BY created_at`);
   if (id && feed === null && !q.rowCount) throw new L.HttpError(404, 'Nicht gefunden');
   const contacts = await db.query(`SELECT id, data FROM items WHERE collection='contacts' AND deleted_at IS NULL`);
-  const body = ICS.calendar(q.rows, contacts.rows, new Date(), feed !== null ? 'Pflegezentrale Termine' : 'Termin');
+  const homes = await db.query(`SELECT id, data FROM items WHERE collection='homes' AND deleted_at IS NULL`);
+  const units = await db.query(`SELECT id, data FROM items WHERE collection='units' AND deleted_at IS NULL`);
+  const body = ICS.calendar(q.rows, contacts.rows, new Date(), feed !== null ? 'Pflegezentrale Termine' : 'Termin', { homes: homes.rows, units: units.rows });
   res.statusCode = 200;
   res.setHeader('Content-Type', 'text/calendar; charset=utf-8');
   res.setHeader('Content-Disposition', `inline; filename="${feed !== null ? 'termine' : 'termin'}.ics"`);

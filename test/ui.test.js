@@ -81,11 +81,17 @@ test('Aufgabe anlegen: gespeichert mit Person und Thema "Wohnen Papa" wählbar',
   assert.equal(r[0].data.th, 'Wohnen Papa');
   assert.equal(r[0].created_by, 'Kristina');
   assert.match(kris.text(), /Besichtigung vereinbaren/);
+  kris.click('[data-new]');
+  assert.deepEqual([...kris.$$('#nw option')].map((o) => o.textContent), ['Kristina', 'Stefan', 'Beide']);
+  kris.set('#nt', 'Gemeinsame Aufgabe', 'input'); kris.set('#nw', 'Beide'); kris.click('#add');
+  await waitFor(async () => (await items('tasks')).some((x) => x.data.who === 'Beide'), 'Aufgabe für beide in DB');
+  assert.equal([...kris.$$('.tk')].find((x) => /Gemeinsame Aufgabe/.test(x.textContent)).querySelectorAll('.av').length, 2, 'beide Kürzel sichtbar');
 });
 
 test('Zweite Person: sieht ihre eigenen Aufgaben, mit "Alle" auch die der anderen', async () => {
   stef = await loginAs('Stefan');
-  assert.match(stef.text(), /Keine Aufgaben für diese Auswahl/);
+  assert.match(stef.text(), /Gemeinsame Aufgabe/, 'Aufgabe für beide erscheint bei Stefan');
+  assert.doesNotMatch(stef.text(), /Besichtigung vereinbaren/, 'Kristinas Aufgabe nicht');
   stef.click('[data-tp="alle"]');
   await waitFor(() => /Besichtigung vereinbaren/.test(stef.text()), 'Aufgabe sichtbar');
   assert.ok(stef.$$('.tag, .badge').length >= 0);
@@ -99,10 +105,15 @@ test('Kontakte: Kategorien, Notiz, Bearbeiten, Suche, Löschen mit Rückfrage', 
   kris.click('[data-addk]');
   const c = await waitFor(async () => { const x = await items('contacts'); return x.length && x[0]; }, 'Kontakt in DB');
   assert.deepEqual({ n: c.data.n, cl: c.data.cl, note: c.data.note }, { n: 'Installateur Beispiel', cl: 'Handwerker', note: 'Nur vormittags' });
-  assert.match(kris.text(), /📝 Nur vormittags/);
+  assert.match(kris.text(), /Nur vormittags/);
   // Mieter anlegen
   kris.click('[data-newk]'); kris.set('#nk_n', 'Frau Beispiel', 'input'); kris.set('#nk_cl', 'Mieter'); kris.set('#nk_t', '0000 777777', 'input'); kris.click('[data-addk]');
   await waitFor(async () => (await items('contacts')).length === 2, 'zweiter Kontakt');
+  const pen = [...kris.$$('[data-edk]')].find((b) => /Installateur/.test(b.getAttribute('aria-label')));
+  assert.ok(pen, 'Bearbeiten-Knopf sichtbar'); pen.click();
+  assert.equal(kris.$('#ek_n').value, 'Installateur Beispiel');
+  [...kris.$$('[data-edk]')].find((b) => /Installateur/.test(b.getAttribute('aria-label'))).click();
+  assert.equal(kris.$('#ek_n'), null, 'zweiter Klick schließt');
   // Bearbeiten durch Antippen
   const card = [...kris.$$('[data-openk]')].find((x) => /Installateur/.test(x.textContent));
   card.querySelector('b').click();
@@ -151,9 +162,10 @@ test('Immobilie Nürnberg: Nutzer anlegen, Notizen, Kontakte verknüpfen, Aufgab
   assert.match(kris.text(), /Zähler ablesen/);
   // Rückweg und Übersicht
   kris.click('[data-ou=""]');
-  assert.match(kris.text(), /1 offene Aufgaben/);
+  assert.match(kris.text(), /1 offene Aufgabe · 1 Kontakt/);
   kris.click('[data-it="over"]');
-  assert.match(kris.text(), /9 Nutzer/);
+  assert.equal([...kris.$$('.num')].map((x) => x.textContent)[0], '9');
+  assert.match(kris.text(), /Nutzer insgesamt/);
   assert.match(kris.text(), /Zähler ablesen/);
   assert.match(kris.text(), /Installateur Beispiel/, 'Handwerker-Kontakte erscheinen automatisch');
   kris.set('#nn_t', 'Heizung 2019 erneuert', 'input'); kris.click('[data-addnote="prop:prop"]');
@@ -207,39 +219,84 @@ test('Demenzwohnen: Objekte, Status mit Verlauf, Aufgaben, Kontakte, Aktueller S
   await waitFor(async () => (await items('homes')).find((x) => x.id === h.id).data.contacts.length === 1, 'Kontakt verknüpft');
 });
 
-test('Termine: Kontakt aus beliebiger Kategorie, Kalender-Link pro Termin und Abo-Adresse', async () => {
+test('Termine: Arzt, Besichtigung Demenzwohnen, Immobilie; Begleitung; Kalender', async () => {
+  kris.click('[data-tab="kontakte"]'); kris.click('[data-newk]'); kris.set('#nk_n', 'Dr. Test', 'input'); kris.set('#nk_cl', 'Ärzte'); kris.set('#nk_t', '0000 999999', 'input'); kris.click('[data-addk]');
+  await waitFor(async () => (await items('contacts')).some((c) => c.data.n === 'Dr. Test'), 'Arzt in DB');
+  const iso = (n) => { const x = new Date(); x.setDate(x.getDate() + n); return `${x.getFullYear()}-${String(x.getMonth() + 1).padStart(2, '0')}-${String(x.getDate()).padStart(2, '0')}`; };
   kris.click('[data-tab="termine"]'); kris.click('[data-newap]');
-  const sel = kris.$('#ap_arzt');
-  assert.ok([...sel.querySelectorAll('optgroup')].some((g) => g.label === 'Demenzwohnen'), 'Kontakte nach Kategorie gruppiert');
-  const opt = [...sel.options].find((o) => /Leitung WG/.test(o.textContent));
-  kris.set('#ap_arzt', opt.value); kris.set('#ap_what', 'Besichtigung WG', 'input');
-  const in5 = new Date(); in5.setDate(in5.getDate() + 5);
-  kris.set('#ap_date', `${in5.getFullYear()}-${String(in5.getMonth() + 1).padStart(2, '0')}-${String(in5.getDate()).padStart(2, '0')}`); kris.set('#ap_time', '15:00');
-  kris.set('#ap_rep', 'custom'); kris.set('#ap_n', '2'); kris.set('#ap_u', 'y'); kris.set('#ap_rem', '3');
+  assert.deepEqual([...kris.$$('#ap_art option')].map((o) => o.value), ['arzt', 'wohnen', 'immo', 'sonst']);
+  assert.ok(kris.$('#ap_hin'), 'Begleitung bei Arztterminen');
+  assert.deepEqual([...kris.$$('#ap_arzt optgroup')].map((g) => g.label), ['Ärzte'], 'bei Arzt nur Ärzte');
+  kris.click('[data-apsave="new"]'); assert.match(kris.text(), /Bitte Arzt/);
+  kris.set('#ap_art', 'wohnen');
+  assert.ok([...kris.$$('#ap_arzt optgroup')].some((g) => g.label === 'Demenzwohnen'));
+  assert.ok(kris.$('#ap_link'), 'Wohnobjekt wählbar');
+  kris.set('#ap_link', [...kris.$('#ap_link').options].find((o) => /Demenz-WG Beispielweg/.test(o.textContent)).value);
+  kris.set('#ap_arzt', [...kris.$('#ap_arzt').options].find((o) => /Leitung WG/.test(o.textContent)).value);
+  kris.set('#ap_what', 'Besichtigung WG', 'input'); kris.set('#ap_date', iso(5)); kris.set('#ap_time', '15:00');
+  kris.set('#ap_hin', 'p:Stefan'); kris.set('#ap_rem', '3');
   kris.click('[data-apsave="new"]');
-  const a = await waitFor(async () => (await items('appts'))[0], 'Termin in DB');
-  assert.deepEqual(a.data.rep, { n: 2, u: 'y' });
-  const link = await waitFor(() => kris.$('a[href^="/api/ics?id="]'), 'Kalender-Link');
-  assert.match(link.textContent, /Zum Kalender/);
-  const r = await fetch(ctx.base + link.getAttribute('href'), { headers: { cookie: kris.jar.cookie } });
-  assert.equal(r.status, 200);
-  assert.match(r.headers.get('content-type'), /text\/calendar/);
-  const ics = await r.text();
-  assert.match(ics, /SUMMARY:Besichtigung WG \(Leitung WG Beispielweg\)/);
-  assert.match(ics, /RRULE:FREQ=YEARLY;INTERVAL=2/);
-  assert.match(ics, /TRIGGER:-P3D/);
-  assert.match(ics, /DTSTART:\d{8}T150000/);
-  // Abo-Adresse in den Einstellungen
+  const a1 = await waitFor(async () => (await items('appts')).find((x) => x.data.what === 'Besichtigung WG'), 'Besichtigung in DB');
+  assert.equal(a1.data.art, 'wohnen'); assert.equal(a1.data.hin, 'p:Stefan');
+  assert.deepEqual(a1.data.link, { k: 'home', id: (await items('homes'))[0].id });
+  const card = [...kris.$$('[data-opena]')].find((x) => /Besichtigung WG/.test(x.textContent));
+  assert.match(card.textContent, /Demenz-WG Beispielweg/); assert.match(card.textContent, /Beispielweg 1, Nürnberg/);
+  const ics = async (id) => (await fetch(ctx.base + '/api/ics?id=' + id, { headers: { cookie: kris.jar.cookie } })).text();
+  let t = (await ics(a1.id)).replace(/\r\n /g, '');
+  assert.match(t, /SUMMARY:Besichtigung WG \(Leitung WG Beispielweg\)/);
+  assert.match(t, /LOCATION:Beispielweg 1\\, Nürnberg/);
+  assert.match(t, /Besichtigung Demenzwohnen/); assert.match(t, /Begleitung: Stefan organisiert/);
+  assert.match(t, /DTSTART:\d{8}T150000/); assert.match(t, /TRIGGER:-P3D/);
+  assert.deepEqual([...kris.$$(`select[data-hin="${a1.id}"] option`)].map((o) => [o.value, o.textContent]),
+    [['offen', 'Transport offen'], ['pflege', 'Pflegedienst bringt'], ['p:Kristina', 'Kristina organisiert'], ['p:Stefan', 'Stefan organisiert'], ['ok', 'Ist organisiert']]);
+  kris.set(`select[data-hin="${a1.id}"]`, 'pflege');
+  await waitFor(async () => (await items('appts')).find((x) => x.id === a1.id).data.hin === 'pflege', 'Begleitung geändert');
+  assert.match((await ics(a1.id)).replace(/\r\n /g, ''), /Begleitung: Pflegedienst bringt hin/);
+  kris.click('[data-newap]'); kris.set('#ap_art', 'immo');
+  assert.equal(kris.$('#ap_hin'), null, 'keine Begleitung bei Immobilie');
+  kris.set('#ap_link', [...kris.$('#ap_link').options].find((o) => /Wohnung 5/.test(o.textContent)).value);
+  kris.set('#ap_what', 'Zustand prüfen', 'input'); kris.set('#ap_date', iso(11)); kris.set('#ap_time', '');
+  kris.click('[data-apsave="new"]');
+  const a2 = await waitFor(async () => (await items('appts')).find((x) => x.data.what === 'Zustand prüfen'), 'Immobilientermin in DB');
+  assert.equal(a2.data.art, 'immo'); assert.equal(a2.data.arzt, ''); assert.equal(a2.data.hin, undefined);
+  assert.match(await ics(a2.id), /DTSTART;VALUE=DATE:/);
+  kris.click('[data-newap]');
+  kris.set('#ap_arzt', [...kris.$('#ap_arzt').options].find((o) => /Dr\. Test/.test(o.textContent)).value);
+  kris.set('#ap_what', 'Kontrolle', 'input'); kris.set('#ap_date', iso(4));
+  kris.click('[data-apsave="new"]');
+  await waitFor(async () => (await items('appts')).some((x) => x.data.what === 'Kontrolle' && x.data.hin === 'offen'), 'Arzttermin mit offener Begleitung');
+  assert.match(kris.text(), /Begleitung noch nicht geklärt \(1\)/);
+  const offen = [...kris.$$('select[data-hin]')].filter((x) => x.value === 'offen');
+  assert.equal(offen.length, 1); assert.ok(offen[0].closest('.blk').className.includes('wa') || offen[0].className.includes('wa'), 'offener Transport ist farblich markiert');
+  kris.click('[data-af="immo"]'); assert.equal(kris.$$('[data-opena]').length, 1); assert.match(kris.text(), /Zustand prüfen/);
+  kris.click('[data-af="wohnen"]'); assert.equal(kris.$$('[data-opena]').length, 1); assert.match(kris.text(), /Besichtigung WG/);
+  kris.click('[data-af="alle"]'); assert.equal(kris.$$('[data-opena]').length, 3);
+  kris.click('[data-tab="wohnen"]'); if (kris.$('[data-oh=""]')) kris.click('[data-oh=""]');
+  kris.click(`[data-oh="${(await items('homes'))[0].id}"]`);
+  assert.match(kris.text(), /Termine \(1\)/); assert.match(kris.text(), /Besichtigung WG/);
+  kris.click('[data-newapl]');
+  assert.equal(kris.$('h1.pt').textContent, 'Termine');
+  assert.equal(kris.$('#ap_art').value, 'wohnen'); assert.match(kris.$('#ap_link').selectedOptions[0].textContent, /Demenz-WG Beispielweg/);
+  assert.match(kris.$('#ap_arzt').selectedOptions[0].textContent, /Leitung WG/, 'Kontakt des Objekts vorbelegt');
+  kris.click('[data-newap]');
   kris.click('[data-tab="settings"]'); kris.click('[data-sett="kal"]');
   const web = kris.$('a[href^="webcal://"]').getAttribute('href');
   assert.match(web, /^webcal:\/\/localhost:\d+\/api\/ics\?feed=/);
   const feed = await fetch(web.replace('webcal://', 'http://'));
-  assert.equal(feed.status, 200, 'Abo funktioniert ohne Anmeldung, nur mit dem Link');
-  assert.match(await feed.text(), /Besichtigung WG/);
+  assert.equal(feed.status, 200);
+  const ft = await feed.text();
+  assert.match(ft, /Besichtigung WG/); assert.match(ft, /Zustand prüfen/); assert.match(ft, /Kontrolle/);
   assert.match(kris.$('input[data-sel]').value, /\/api\/ics\?feed=/);
-  // Protokoll-Tab
-  kris.click('[data-sett="prot"]');
-  await waitFor(() => /Wohnobjekt angelegt/.test(kris.text()) || true, 'Protokoll');
+});
+
+test('Bildschirm starr und nicht zoombar', async () => {
+  const html = fs.readFileSync(path.join(__dirname, '..', 'public', 'index.html'), 'utf8');
+  assert.match(html, /<meta name="viewport"[^>]*maximum-scale=1[^>]*user-scalable=no/);
+  assert.match(html, /touch-action:manipulation/);
+  assert.match(html, /input,select,textarea\{[^}]*font-size:16px/, 'Eingabefelder mind. 16 px, damit iOS nicht hineinzoomt');
+  const e = new kris.w.Event('gesturestart', { cancelable: true, bubbles: true });
+  kris.d.dispatchEvent(e);
+  assert.equal(e.defaultPrevented, true, 'Pinch-Geste wird blockiert');
 });
 
 test('Nach dem Neuladen ist alles noch da (Aufgaben, Nutzer, Notizen, Objekte, Immobilien-Notizen)', async () => {
@@ -278,7 +335,7 @@ test('App sperren führt zurück zum Code', async () => {
 test('Datenbank enthält alles, die öffentliche Seite nichts davon', async () => {
   const n = await row("SELECT collection, count(*)::int AS n FROM items WHERE deleted_at IS NULL GROUP BY 1 ORDER BY 1");
   const by = Object.fromEntries(n.map((x) => [x.collection, x.n]));
-  assert.ok(by.tasks >= 3 && by.units === 9 && by.homes === 2 && by.appts === 1 && by.contacts === 2 && by.prop === 1 && by.tpls === 3 && by.drafts === 2 && by.trip === 1, JSON.stringify(by));
+  assert.ok(by.tasks >= 3 && by.units === 9 && by.homes === 2 && by.appts === 3 && by.contacts === 3 && by.prop === 1 && by.tpls === 3 && by.drafts === 2 && by.trip === 1, JSON.stringify(by));
   const html = fs.readFileSync(path.join(__dirname, '..', 'public', 'app.js'), 'utf8') + fs.readFileSync(path.join(__dirname, '..', 'public', 'index.html'), 'utf8');
   assert.doesNotMatch(html, /Kristina|Stefan|Dieter|data:image\/jpeg/);
   assert.doesNotMatch(html, /onclick=|onchange=|oninput=/, 'keine Inline-Handler (CSP)');

@@ -42,6 +42,18 @@ test('ICS: lange Zeilen werden nach 75 Bytes umgebrochen, Umlaute zerreißen nic
   assert.equal(esc('a\\b'), 'a\\\\b');
 });
 
+test('ICS: Besichtigung mit Objekt, Adresse und Begleitung; Termin ohne Kontakt', () => {
+  const ics = calendar([{ id: 'p3', rev: '5', updated: NOW, data: { art: 'wohnen', arzt: '', what: 'Besichtigung', date: '2026-12-01', time: '10:00', rep: null, rem: 1, hin: 'p:Kristina', link: { k: 'home', id: 'h1' }, note: '' } }], contacts, NOW, 'x', { homes: [{ id: 'h1', data: { n: 'Demenz-WG Beispielweg', adr: 'Beispielweg 1, Nürnberg' } }], units: [] });
+  const flat = ics.replace(/\r\n /g, '');
+  assert.match(flat, /SUMMARY:Besichtigung \(Demenz-WG Beispielweg\)/);
+  assert.match(flat, /LOCATION:Beispielweg 1\\, Nürnberg/);
+  assert.match(flat, /DESCRIPTION:Besichtigung Demenzwohnen\\nDemenz-WG Beispielweg · Beispielweg 1\\, Nürnberg\\nBegleitung: Kristina organisiert/);
+  const u = calendar([{ id: 'p4', rev: '1', updated: NOW, data: { art: 'immo', what: 'Übergabe', date: '2026-12-02', time: '', link: { k: 'unit', id: 'u1' }, hin: 'offen' } }], contacts, NOW, 'x', { homes: [], units: [{ id: 'u1', data: { n: 'Wohnung 3' } }] });
+  assert.match(u.replace(/\r\n /g, ''), /SUMMARY:Übergabe \(Wohnung 3\)/); assert.doesNotMatch(u, /LOCATION/);
+  assert.match(u.replace(/\r\n /g, ''), /Begleitung: noch nicht geklärt/);
+  assert.match(calendar([{ id: 'p5', rev: '1', updated: NOW, data: { what: 'X', date: '2026-12-03', hin: 'selbst' } }], contacts, NOW).replace(/\r\n /g, ''), /Geht selbst hin/, 'Altwert bleibt lesbar');
+});
+
 test('ICS: Termin ohne Datum wird übersprungen', () => {
   const ics = calendar([{ id: 'x', rev: '1', updated: NOW, data: { what: 'Kaputt', date: 'morgen' } }], contacts, NOW);
   assert.doesNotMatch(ics, /VEVENT/);

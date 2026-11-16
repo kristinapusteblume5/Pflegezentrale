@@ -33,15 +33,18 @@ function nextOcc(a, from) {
   return c;
 }
 
-function event(a, byId, meta, now) {
+function event(a, byId, objs, meta, now) {
   const from = new Date(now); from.setHours(0, 0, 0, 0);
   if (!/^\d{4}-\d{2}-\d{2}$/.test(a.date || '')) return null;
   const o = nextOcc(a, from);
   const doc = byId.get(a.arzt);
+  const tgt = a.link && objs[a.link.k] ? objs[a.link.k].get(a.link.id) : null;
+  const who = doc ? doc.n : (tgt ? tgt.n : '');
   const L = ['BEGIN:VEVENT', `UID:${a.id}@pflegezentrale`, `DTSTAMP:${utc(now)}`];
   if (meta && meta.updated) L.push(`LAST-MODIFIED:${utc(new Date(meta.updated))}`);
   if (meta && meta.rev) L.push(`SEQUENCE:${Number(meta.rev) % 1000000}`);
-  L.push(`SUMMARY:${esc(`${a.what || 'Termin'}${doc ? ` (${doc.n})` : ''}`)}`);
+  L.push(`SUMMARY:${esc(`${a.what || 'Termin'}${who ? ` (${who})` : ''}`)}`);
+  if (tgt && tgt.adr) L.push(`LOCATION:${esc(tgt.adr)}`);
   if (/^\d{2}:\d{2}$/.test(a.time || '')) { L.push(`DTSTART:${ymd(o)}T${a.time.replace(':', '')}00`, 'DURATION:PT1H'); }
   else L.push(`DTSTART;VALUE=DATE:${ymd(o)}`);
   if (a.rep && Number.isInteger(a.rep.n) && a.rep.n >= 1 && { w: 1, m: 1, y: 1 }[a.rep.u]) {
@@ -49,6 +52,16 @@ function event(a, byId, meta, now) {
   }
   const desc = [];
   if (a.note) desc.push(a.note);
+  const ART = { wohnen: 'Besichtigung Demenzwohnen', immo: 'Immobilie' };
+  if (ART[a.art]) desc.push(ART[a.art]);
+  if (tgt) desc.push(`${tgt.n}${tgt.adr ? ' · ' + tgt.adr : ''}`);
+  const hin = a.hin === 'offen' ? 'Begleitung: noch nicht geklärt'
+    : a.hin === 'pflege' ? 'Begleitung: Pflegedienst bringt hin'
+    : a.hin === 'ok' ? 'Begleitung: ist organisiert'
+    : a.hin === 'selbst' ? 'Geht selbst hin'
+    : a.hin === 'andere' ? 'Begleitung: jemand anderes bringt hin'
+    : /^p:/.test(a.hin || '') ? `Begleitung: ${a.hin.slice(2)} organisiert` : '';
+  if (hin) desc.push(hin);
   if (doc) desc.push(`${doc.n}${doc.r ? ' · ' + doc.r : ''}${doc.t ? ' · Tel. ' + doc.t : ''}`);
   if (desc.length) L.push(`DESCRIPTION:${esc(desc.join('\n'))}`);
   if (a.rem > 0) L.push('BEGIN:VALARM', `TRIGGER:-P${Math.floor(a.rem)}D`, 'ACTION:DISPLAY', 'DESCRIPTION:Erinnerung', 'END:VALARM');
@@ -57,10 +70,11 @@ function event(a, byId, meta, now) {
 }
 
 /** appts: [{data, rev, updated}], contacts: [{id, data}] */
-function calendar(appts, contacts, now = new Date(), name = 'Pflegezentrale Termine') {
+function calendar(appts, contacts, now = new Date(), name = 'Pflegezentrale Termine', extra = {}) {
   const byId = new Map(contacts.map((c) => [c.id, c.data]));
+  const objs = { home: new Map((extra.homes || []).map((h) => [h.id, h.data])), unit: new Map((extra.units || []).map((u) => [u.id, u.data])) };
   const lines = ['BEGIN:VCALENDAR', 'VERSION:2.0', 'PRODID:-//Pflegezentrale//DE', 'CALSCALE:GREGORIAN', `X-WR-CALNAME:${esc(name)}`];
-  for (const x of appts) { const ev = event({ ...x.data, id: x.id }, byId, { rev: x.rev, updated: x.updated }, now); if (ev) lines.push(...ev); }
+  for (const x of appts) { const ev = event({ ...x.data, id: x.id }, byId, objs, { rev: x.rev, updated: x.updated }, now); if (ev) lines.push(...ev); }
   lines.push('END:VCALENDAR');
   return lines.map(fold).join('\r\n') + '\r\n';
 }
