@@ -20,9 +20,9 @@ function getConfig() {
   const secret = e.SESSION_SECRET || '';
   const url = e.DATABASE_URL || e.POSTGRES_URL || '';
   const problems = [];
-  if (code.length < 10) problems.push('FAMILY_CODE fehlt oder ist kuerzer als 10 Zeichen');
-  if (secret.length < 32) problems.push('SESSION_SECRET fehlt oder ist kuerzer als 32 Zeichen');
-  if (!url) problems.push('DATABASE_URL fehlt');
+  if (code.length < 10) problems.push(code ? 'FAMILY_CODE ist kürzer als 10 Zeichen' : 'FAMILY_CODE fehlt');
+  if (secret.length < 32) problems.push(secret ? 'SESSION_SECRET ist kürzer als 32 Zeichen' : 'SESSION_SECRET fehlt');
+  if (!url) problems.push('DATABASE_URL fehlt (Datenbank nicht mit dem Projekt verbunden)');
   if (problems.length) { const err = new Error(problems.join('; ')); err.config = true; throw err; }
   return {
     code, secret, url,
@@ -137,7 +137,7 @@ function route(method, fn) {
     } catch (e) {
       if (e instanceof HttpError) return send(res, e.status, { error: e.message, ...(e.extra || {}) });
       console.error(e);
-      if (e.config) return send(res, 500, { error: 'Server nicht fertig eingerichtet' });
+      if (e.config) return send(res, 500, { error: 'Server nicht fertig eingerichtet', fehlt: String(e.message).split('; ') });
       return send(res, 500, { error: 'Interner Fehler' });
     }
   };

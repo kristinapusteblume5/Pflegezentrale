@@ -96,9 +96,9 @@ function readForm(){const f=Object.assign({},apf||apfNew());['art','arzt','what'
 const ART=[['arzt','Arzt','cross','Arzt'],['wohnen','Besichtigung Demenzwohnen','home','Demenzwohnen'],['immo','Immobilie (Besichtigung, Handwerker, Mieter)','build','Immobilie'],['sonst','Sonstiges','pin','Sonstiges']];
 const artOf=a=>a.art||'arzt',artRow=k=>ART.find(x=>x[0]===k)||ART[0],artLabel=k=>artRow(k)[1],artIcon=k=>artRow(k)[2],artShort=k=>artRow(k)[3];
 const needsHin=a=>['arzt','wohnen'].includes(artOf(a));
-const HIN_KEYS=()=>['offen','pflege',...PE.map(p=>'p:'+p),'ok'];
+const HIN_KEYS=()=>['offen','pflege',...PE.map(p=>'p:'+p),'ok','kein'];
 const hinLabel=v=>{v=v||'offen';
- return v==='pflege'?'Pflegedienst bringt':v==='ok'?'Ist organisiert'
+ return v==='pflege'?'Pflegedienst bringt':v==='ok'?'Ist organisiert':v==='kein'?'Transport wird nicht gebraucht'
   :v==='selbst'?'Geht selbst hin':v==='andere'?'Andere bringen'
   :v.startsWith('p:')?v.slice(2)+' organisiert':'Transport offen'};
 const hinOpts=hv=>{const k=HIN_KEYS();if(!k.includes(hv))k.push(hv);
@@ -141,6 +141,16 @@ function acard(a,occ,feat){const dd=dayDiff(occ),due=a.rem>0&&dd>=0&&dd<=a.rem,d
  ${due?`<div class="mu row warn" style="gap:5px;margin-top:5px;font-weight:650">${ic('bell')}Erinnerung: ${rl||a.rem+' Tage vorher'}</div>`:''}
  ${nh?`<div class="row sp" style="margin-top:12px;gap:8px"><select class="ss ${hv==='offen'?'wa':'ok'}" data-hin="${a.id}" aria-label="Wer bringt ${esc(CARE)} hin?">${hinOpts(hv)}</select><a class="lnk" href="/api/ics?id=${a.id}">${ic('calx')}Kalender</a></div>`
   :`<div class="row" style="margin-top:10px"><a class="lnk" href="/api/ics?id=${a.id}">${ic('calx')}Kalender</a></div>`}</div>`}
+const acardMini=(a,occ)=>{const dd=dayDiff(occ),due=a.rem>0&&dd>=0&&dd<=a.rem,hv=a.hin||'offen',nh=needsHin(a);
+ return `<div class="blk tk k-${artOf(a)}${due?' due':''}" data-opena="${a.id}" style="padding:12px 14px">
+ <div class="row sp" style="flex-wrap:nowrap;gap:10px;align-items:flex-start"><b class="apt" style="font-size:var(--f4)">${esc(a.what)}</b>${dd>=0?`<span class="rel">${rel(dd)}</span>`:''}</div>
+ <div class="apw">${dl(occ)}${a.time?' · '+a.time:''}${nh&&hv==='offen'?' · <span class="warn">Transport offen</span>':''}${due?' · <span class="warn">Erinnerung läuft</span>':''}</div></div>`};
+function startAppts(){const pick=upcoming().slice(0,3);
+ // Termine mit laufender Erinnerung gehören auf den Startbildschirm, auch wenn sie weiter weg sind
+ dueRem().forEach(x=>{if(!pick.some(y=>y.a.id===x.a.id))pick.push(x)});
+ const l=pick.sort((x,y)=>x.occ-y.occ).slice(0,4);
+ if(!l.length)return '';
+ return `<div class="row sp">${h2('Nächste Termine')}<button class="s gh" data-tab="termine">Alle ansehen</button></div>`+l.map(x=>acardMini(x.a,x.occ)).join('')}
 const remBlock=btn=>{const r=dueRem();return r.length?h2('Erinnerungen',r.length)+listOf(r.map(x=>`<div class="card att"><div class="row" style="gap:8px;flex-wrap:nowrap"><span class="warn" style="display:flex">${ic('bell')}</span><b>${esc(x.a.what)}</b></div><div class="mu" style="margin-top:2px">${rel(dayDiff(x.occ))} · ${dl(x.occ)} · ${esc(arztName(x.a))}</div>${needsHin(x.a)&&(x.a.hin||'offen')==='offen'?'<div class="warn mu">Begleitung noch nicht geklärt</div>':''}${btn?`<button class="s" data-apt="${x.a.id}" style="margin-top:9px">${ic('plus')}Als Aufgabe anlegen</button>`:''}</div>`),''):''};
 const hinOpen=up=>{const o=up.filter(x=>needsHin(x.a)&&(x.a.hin||'offen')==='offen'&&dayDiff(x.occ)<=14);
  return o.length?`<div class="alert"><div class="row" style="gap:8px;flex-wrap:nowrap"><span class="warn" style="display:flex">${ic('car')}</span><b>Begleitung noch nicht geklärt (${o.length})</b></div>${o.slice(0,4).map(x=>`<div class="mu" style="margin-top:3px">${dl(x.occ)} · ${esc(x.a.what)}</div>`).join('')}</div>`:''};
@@ -213,7 +223,7 @@ function vTasks(){const base=tasks.filter(t=>!t.arch&&(tp==='alle'||t.who===tp||
  const secs=ST.map((s,i)=>{const x=list.filter(t=>t.st===i);if(!x.length)return '';
   if(i===3)return `<div class="row sp">${h2('Erledigt',x.length)}<button class="s gh" data-sd="1">${showDone?'Ausblenden':'Anzeigen'}</button></div>${showDone?x.map(trow).join(''):''}`;
   return h2(s,x.length)+x.map(trow).join('')}).join('');
- return `${hero()}${remBlock(false)}<div class="ph2"><h1 class="pt">Aufgaben</h1><button class="p s" data-new="1">${showNew?'Abbrechen':ic('plus')+'Aufgabe'}</button></div>${form}
+ return `${hero()}${startAppts()}<div class="ph2"><h1 class="pt">Aufgaben</h1><button class="p s" data-new="1">${showNew?'Abbrechen':ic('plus')+'Aufgabe'}</button></div>${form}
  ${tabs(['alle',...PE].map(x=>[x,x==='alle'?'Alle':x]),tp,'tp')}
  ${chips(['alle',...TH].map(x=>[x,`${x==='alle'?'':`<span class="dot t${ti(x)}"></span>`}${x==='alle'?'Alle Themen':x} (${cnt(x)})`]),tth,'th')}
  ${secs||empty('Keine Aufgaben für diese Auswahl','Anderen Filter wählen oder oben eine Aufgabe anlegen.')}

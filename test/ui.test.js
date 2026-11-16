@@ -248,7 +248,7 @@ test('Termine: Arzt, Besichtigung Demenzwohnen, Immobilie; Begleitung; Kalender'
   assert.match(t, /Besichtigung Demenzwohnen/); assert.match(t, /Begleitung: Stefan organisiert/);
   assert.match(t, /DTSTART:\d{8}T150000/); assert.match(t, /TRIGGER:-P3D/);
   assert.deepEqual([...kris.$$(`select[data-hin="${a1.id}"] option`)].map((o) => [o.value, o.textContent]),
-    [['offen', 'Transport offen'], ['pflege', 'Pflegedienst bringt'], ['p:Kristina', 'Kristina organisiert'], ['p:Stefan', 'Stefan organisiert'], ['ok', 'Ist organisiert']]);
+    [['offen', 'Transport offen'], ['pflege', 'Pflegedienst bringt'], ['p:Kristina', 'Kristina organisiert'], ['p:Stefan', 'Stefan organisiert'], ['ok', 'Ist organisiert'], ['kein', 'Transport wird nicht gebraucht']]);
   kris.set(`select[data-hin="${a1.id}"]`, 'pflege');
   await waitFor(async () => (await items('appts')).find((x) => x.id === a1.id).data.hin === 'pflege', 'Begleitung geändert');
   assert.match((await ics(a1.id)).replace(/\r\n /g, ''), /Begleitung: Pflegedienst bringt hin/);

@@ -58,6 +58,7 @@ function event(a, byId, objs, meta, now) {
   const hin = a.hin === 'offen' ? 'Begleitung: noch nicht geklärt'
     : a.hin === 'pflege' ? 'Begleitung: Pflegedienst bringt hin'
     : a.hin === 'ok' ? 'Begleitung: ist organisiert'
+    : a.hin === 'kein' ? 'Begleitung: wird nicht gebraucht'
     : a.hin === 'selbst' ? 'Geht selbst hin'
     : a.hin === 'andere' ? 'Begleitung: jemand anderes bringt hin'
     : /^p:/.test(a.hin || '') ? `Begleitung: ${a.hin.slice(2)} organisiert` : '';

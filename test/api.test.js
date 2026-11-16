@@ -15,7 +15,10 @@ test('Server ohne Konfiguration meldet "nicht fertig eingerichtet" statt Details
   process.env.FAMILY_CODE = saved;
   assert.equal(r.status, 500);
   assert.match(r.json.error, /nicht fertig eingerichtet/);
-  assert.doesNotMatch(JSON.stringify(r.json), /FAMILY_CODE|SESSION_SECRET/);
+  // Nennt die fehlende Einstellung beim Namen, damit die Einrichtung nicht zum Ratespiel wird ...
+  assert.deepEqual(r.json.fehlt, ['FAMILY_CODE ist kürzer als 10 Zeichen']);
+  // ... verrät aber keine Werte und keinen Stacktrace.
+  assert.doesNotMatch(JSON.stringify(r.json), /kurz|postgres:|at |Error:/);
 });
 
 test('geschützte Endpunkte verlangen Anmeldung', async () => {
